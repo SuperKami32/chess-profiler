@@ -1,0 +1,2 @@
+[console_scripts]
+chess-profiler = src.cli:main
