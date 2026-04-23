@@ -205,6 +205,99 @@ def generate_html(profile: Profile) -> str:
         </div>
         """)
 
+    # --- Engine Analysis ---
+    if profile.games_analyzed > 0:
+        avg_blunders = profile.total_blunders / profile.games_analyzed
+        avg_mistakes = profile.total_mistakes / profile.games_analyzed
+
+        # Summary cards for engine stats
+        sections.append(f"""
+        <div class="cards">
+            <div class="card" style="border-color:#f85149">
+                <div class="card-value">{profile.total_blunders}</div>
+                <div class="card-label">Blunders ({avg_blunders:.1f}/game)</div>
+            </div>
+            <div class="card" style="border-color:#d29922">
+                <div class="card-value">{profile.total_mistakes}</div>
+                <div class="card-label">Mistakes ({avg_mistakes:.1f}/game)</div>
+            </div>
+            <div class="card">
+                <div class="card-value">{profile.total_inaccuracies}</div>
+                <div class="card-label">Inaccuracies</div>
+            </div>
+            <div class="card">
+                <div class="card-value">{profile.games_analyzed}</div>
+                <div class="card-label">Games Analyzed</div>
+            </div>
+        </div>
+        """)
+
+        # Blunder types
+        if profile.blunder_types:
+            total_b = sum(profile.blunder_types.values())
+            rows = ""
+            for btype, count in sorted(profile.blunder_types.items(), key=lambda x: x[1], reverse=True):
+                pct = count / total_b * 100
+                label = btype.replace("_", " ").title()
+                rows += (
+                    f"<tr><td>{label}</td><td>{count} ({pct:.0f}%)</td>"
+                    f"<td>{_bar(count, total_b, '#f85149')}</td></tr>"
+                )
+            sections.append(f"""
+            <div class="section danger">
+                <h2>Blunder Types</h2>
+                <table><tr><th>Type</th><th>Count</th><th></th></tr>
+                {rows}
+                </table>
+            </div>
+            """)
+
+        # Blunders by game phase
+        if profile.blunder_phase:
+            total_b = sum(profile.blunder_phase.values())
+            rows = ""
+            phase_order = ["opening (moves 1-10)", "middlegame (moves 11-25)", "endgame (moves 26+)"]
+            for phase in phase_order:
+                if phase in profile.blunder_phase:
+                    count = profile.blunder_phase[phase]
+                    pct = count / total_b * 100
+                    rows += (
+                        f"<tr><td>{phase}</td><td>{count} ({pct:.0f}%)</td>"
+                        f"<td>{_bar(count, total_b, '#d29922')}</td></tr>"
+                    )
+            sections.append(f"""
+            <div class="section">
+                <h2>Blunders By Game Phase</h2>
+                <table><tr><th>Phase</th><th>Count</th><th></th></tr>
+                {rows}
+                </table>
+            </div>
+            """)
+
+        # Worst blunders
+        if profile.worst_blunders:
+            rows = ""
+            for b in profile.worst_blunders[:5]:
+                btype = (b["blunder_type"] or "other").replace("_", " ").title()
+                best = f'Best: {b["best_move"]}' if b["best_move"] else ""
+                link = b["game_url"]
+                rows += (
+                    f'<tr><td>Move {b["move_number"]}</td>'
+                    f'<td>{b["move_san"]}</td>'
+                    f'<td>-{b["cp_loss"]}cp</td>'
+                    f'<td>{btype}</td>'
+                    f'<td>{best}</td>'
+                    f'<td><a href="{link}" target="_blank">View</a></td></tr>'
+                )
+            sections.append(f"""
+            <div class="section danger">
+                <h2>Top 5 Worst Blunders</h2>
+                <table><tr><th>Move</th><th>Played</th><th>Loss</th><th>Type</th><th>Better</th><th></th></tr>
+                {rows}
+                </table>
+            </div>
+            """)
+
     # --- Weakest Openings ---
     openings = {
         name: stats for name, stats in profile.by_opening_and_color.items()

@@ -5,7 +5,7 @@ import sys
 
 from .api import get_all_games
 from .models import game_from_api
-from .profiler import build_profile, format_profile
+from .profiler import build_profile, format_profile, enrich_with_analysis
 from .report import save_report
 
 
@@ -23,6 +23,14 @@ def main():
     parser.add_argument(
         "-o", "--output", action="store_true",
         help="Save report to reports/ directory",
+    )
+    parser.add_argument(
+        "--analyze", action="store_true",
+        help="Run Stockfish engine analysis (slower, but finds blunders)",
+    )
+    parser.add_argument(
+        "--depth", type=int, default=12,
+        help="Stockfish analysis depth (default: 12)",
     )
     args = parser.parse_args()
 
@@ -42,6 +50,18 @@ def main():
     print(f"Found {len(raw_games)} games. Analyzing...")
     games = [game_from_api(g) for g in raw_games]
     profile = build_profile(username, games)
+
+    if args.analyze:
+        from .engine import analyze_games
+
+        def progress(current, total, cached=False):
+            status = "cached" if cached else "analyzing"
+            print(f"\r  Engine analysis: {current}/{total} ({status})...", end="", flush=True)
+
+        print("Running Stockfish analysis...")
+        analyses = analyze_games(games, depth=args.depth, progress_callback=progress)
+        print()  # newline after progress
+        enrich_with_analysis(profile, analyses, games)
 
     if args.output or args.format == "html":
         path = save_report(profile, fmt=args.format)

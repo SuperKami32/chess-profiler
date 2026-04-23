@@ -17,6 +17,8 @@ python3 -m venv .venv && .venv/bin/pip install -e .
 .venv/bin/python -m src.cli <username> -n 6          # last 6 months only
 .venv/bin/python -m src.cli <username> -f html       # HTML report to reports/
 .venv/bin/python -m src.cli <username> -o             # save text report to reports/
+.venv/bin/python -m src.cli <username> --analyze      # run Stockfish blunder detection
+.venv/bin/python -m src.cli <username> --analyze --depth 16  # deeper analysis (slower)
 ```
 
 ## Architecture
@@ -27,7 +29,8 @@ Pipeline: **API fetch → Game model → Profiler → CLI output**
 - `src/models.py` — `Game` dataclass and `game_from_api()` parser. Extracts opening names from Chess.com's ECO URLs. All player-relative queries (result, color, rating, accuracy) go through `Game` methods.
 - `src/profiler.py` — `build_profile()` aggregates games into a `Profile` with stats by color, time control, opening, loss type, game length, and accuracy trends. `format_profile()` renders the text report.
 - `src/report.py` — `generate_html()` produces a self-contained dark-theme HTML report with CSS bar charts and SVG sparklines. `save_report()` writes to `reports/`.
-- `src/cli.py` — Argparse entry point, wires the pipeline together. Flags: `-n` months, `-f` format, `-o` save.
+- `src/engine.py` — Stockfish integration via `python-chess`. `analyze_game()` walks PGN move-by-move, computes centipawn loss, classifies blunders (hung piece, missed tactic, missed mate, bad trade). Results cached as JSON in `data/processed/`. `analyze_games()` handles batch analysis with caching.
+- `src/cli.py` — Argparse entry point, wires the pipeline together. Flags: `-n` months, `-f` format, `-o` save, `--analyze`, `--depth`.
 
 ## Chess.com API
 
@@ -42,3 +45,4 @@ Game objects include: `white`/`black` (username, rating, result), `time_class`, 
 - `.venv/` — virtual environment (gitignored)
 - `.env` — secrets (gitignored)
 - `data/raw/`, `data/processed/` — cached game data (gitignored)
+- Stockfish binary at `/usr/games/stockfish` (system-installed)
