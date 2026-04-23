@@ -20,6 +20,9 @@ python3 -m venv .venv && .venv/bin/pip install -e .
 .venv/bin/python -m src.cli <username> --analyze      # run Stockfish blunder detection
 .venv/bin/python -m src.cli <username> --analyze --depth 16  # deeper analysis (slower)
 .venv/bin/python -m src.cli <username> --puzzles             # generate tactic puzzle HTML (implies --analyze)
+.venv/bin/python -m src.cli <username> --review              # daily review (yesterday, implies --analyze)
+.venv/bin/python -m src.cli <username> --review 2025.02.02   # review a specific date
+.venv/bin/python -m src.cli <username> --prep <opponent>     # opponent scouting report
 ```
 
 ## Architecture
@@ -34,7 +37,9 @@ Pipeline: **API fetch → Game model → Profiler → CLI output**
 - `src/puzzles.py` — Extracts blunder positions as interactive HTML puzzles with SVG boards (via `chess.svg`). Click to reveal the best move.
 - `src/patterns.py` — Blunder pattern recognition: which pieces you blunder with, tactical motifs missed (captures, checks, forks, discovered attacks), board region, eval context (blundering when winning/even/losing). Generates natural-language insights.
 - `src/openings.py` — Opening recommendations: identifies problem openings (high frequency, low win rate) and strengths. Generates specific study suggestions.
-- `src/cli.py` — Argparse entry point, wires the pipeline together. Flags: `-n` months, `-f` format, `-o` save, `--analyze`, `--depth`, `--puzzles`.
+- `src/review.py` — Daily review mode. Filters games by date, shows result + key mistake per game, identifies the pattern across the day's games. Text and HTML output.
+- `src/prep.py` — Opponent prep. Fetches an opponent's games, profiles their openings/weaknesses by color, compares accuracy, generates specific recommendations for what to play.
+- `src/cli.py` — Argparse entry point, wires the pipeline together. Flags: `-n` months, `-f` format, `-o` save, `--analyze`, `--depth`, `--puzzles`, `--review`, `--prep`.
 
 ## Chess.com API
 
