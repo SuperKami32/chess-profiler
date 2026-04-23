@@ -32,7 +32,15 @@ def main():
         "--depth", type=int, default=12,
         help="Stockfish analysis depth (default: 12)",
     )
+    parser.add_argument(
+        "--puzzles", action="store_true",
+        help="Generate tactic puzzles from blunders (implies --analyze)",
+    )
     args = parser.parse_args()
+
+    # --puzzles implies --analyze
+    if args.puzzles:
+        args.analyze = True
 
     username = args.username
     print(f"Fetching games for {username}...")
@@ -51,6 +59,7 @@ def main():
     games = [game_from_api(g) for g in raw_games]
     profile = build_profile(username, games)
 
+    analyses = None
     if args.analyze:
         from .engine import analyze_games
 
@@ -63,12 +72,33 @@ def main():
         print()  # newline after progress
         enrich_with_analysis(profile, analyses, games)
 
+    # Pattern recognition and opening recommendations (always included)
+    from .patterns import analyze_patterns, format_patterns
+    from .openings import analyze_openings, format_recommendations
+
+    opening_recs = analyze_openings(profile, games)
+
+    if args.puzzles and analyses:
+        from .puzzles import extract_puzzles, save_puzzles
+        puzzles = extract_puzzles(analyses, username, games)
+        path = save_puzzles(puzzles, username)
+        print(f"Generated {len(puzzles)} puzzles → {path}")
+
     if args.output or args.format == "html":
-        path = save_report(profile, fmt=args.format)
+        pattern_report = analyze_patterns(analyses, username, games) if analyses else None
+        path = save_report(profile, fmt=args.format,
+                           pattern_report=pattern_report,
+                           opening_recs=opening_recs)
         print(f"\nReport saved to: {path}")
     else:
         print()
         print(format_profile(profile))
+        if analyses:
+            pattern_report = analyze_patterns(analyses, username, games)
+            print()
+            print(format_patterns(pattern_report))
+        print()
+        print(format_recommendations(opening_recs))
 
 
 if __name__ == "__main__":

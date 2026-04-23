@@ -19,6 +19,7 @@ python3 -m venv .venv && .venv/bin/pip install -e .
 .venv/bin/python -m src.cli <username> -o             # save text report to reports/
 .venv/bin/python -m src.cli <username> --analyze      # run Stockfish blunder detection
 .venv/bin/python -m src.cli <username> --analyze --depth 16  # deeper analysis (slower)
+.venv/bin/python -m src.cli <username> --puzzles             # generate tactic puzzle HTML (implies --analyze)
 ```
 
 ## Architecture
@@ -30,7 +31,10 @@ Pipeline: **API fetch → Game model → Profiler → CLI output**
 - `src/profiler.py` — `build_profile()` aggregates games into a `Profile` with stats by color, time control, opening, loss type, game length, and accuracy trends. `format_profile()` renders the text report.
 - `src/report.py` — `generate_html()` produces a self-contained dark-theme HTML report with CSS bar charts and SVG sparklines. `save_report()` writes to `reports/`.
 - `src/engine.py` — Stockfish integration via `python-chess`. `analyze_game()` walks PGN move-by-move, computes centipawn loss, classifies blunders (hung piece, missed tactic, missed mate, bad trade). Results cached as JSON in `data/processed/`. `analyze_games()` handles batch analysis with caching.
-- `src/cli.py` — Argparse entry point, wires the pipeline together. Flags: `-n` months, `-f` format, `-o` save, `--analyze`, `--depth`.
+- `src/puzzles.py` — Extracts blunder positions as interactive HTML puzzles with SVG boards (via `chess.svg`). Click to reveal the best move.
+- `src/patterns.py` — Blunder pattern recognition: which pieces you blunder with, tactical motifs missed (captures, checks, forks, discovered attacks), board region, eval context (blundering when winning/even/losing). Generates natural-language insights.
+- `src/openings.py` — Opening recommendations: identifies problem openings (high frequency, low win rate) and strengths. Generates specific study suggestions.
+- `src/cli.py` — Argparse entry point, wires the pipeline together. Flags: `-n` months, `-f` format, `-o` save, `--analyze`, `--depth`, `--puzzles`.
 
 ## Chess.com API
 

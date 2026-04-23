@@ -56,7 +56,7 @@ def _rating_sparkline(ratings: list[int]) -> str:
     )
 
 
-def generate_html(profile: Profile) -> str:
+def generate_html(profile: Profile, pattern_report=None, opening_recs=None) -> str:
     """Generate a self-contained HTML report."""
     avg_acc = profile.avg_accuracy()
     recent_acc = profile.recent_accuracy(20)
@@ -338,6 +338,123 @@ def generate_html(profile: Profile) -> str:
         </div>
         """)
 
+    # --- Pattern Analysis ---
+    if pattern_report and pattern_report.total_blunders > 0:
+        # Piece moved when blundering
+        if pattern_report.piece_moved:
+            total = sum(pattern_report.piece_moved.values())
+            rows = ""
+            for piece, count in sorted(pattern_report.piece_moved.items(), key=lambda x: x[1], reverse=True):
+                pct = count / total * 100
+                rows += (
+                    f"<tr><td>{piece.title()}</td><td>{count} ({pct:.0f}%)</td>"
+                    f"<td>{_bar(count, total, '#d29922')}</td></tr>"
+                )
+            sections.append(f"""
+            <div class="section">
+                <h2>Piece Moved When Blundering</h2>
+                <table><tr><th>Piece</th><th>Count</th><th></th></tr>
+                {rows}
+                </table>
+            </div>
+            """)
+
+        # Tactical motifs missed
+        if pattern_report.motifs:
+            total = sum(pattern_report.motifs.values())
+            rows = ""
+            for motif, count in sorted(pattern_report.motifs.items(), key=lambda x: x[1], reverse=True):
+                pct = count / total * 100
+                rows += (
+                    f"<tr><td>{motif.title()}</td><td>{count} ({pct:.0f}%)</td>"
+                    f"<td>{_bar(count, total, '#58a6ff')}</td></tr>"
+                )
+            sections.append(f"""
+            <div class="section">
+                <h2>What You're Missing (Best Move Was)</h2>
+                <table><tr><th>Motif</th><th>Count</th><th></th></tr>
+                {rows}
+                </table>
+            </div>
+            """)
+
+        # Position context when blundering
+        if pattern_report.eval_context:
+            total = sum(pattern_report.eval_context.values())
+            rows = ""
+            colors = {"winning": "#238636", "even": "#8b949e", "losing": "#f85149"}
+            for ctx in ["winning", "even", "losing"]:
+                if ctx in pattern_report.eval_context:
+                    count = pattern_report.eval_context[ctx]
+                    pct = count / total * 100
+                    rows += (
+                        f"<tr><td>{ctx.title()}</td><td>{count} ({pct:.0f}%)</td>"
+                        f"<td>{_bar(count, total, colors.get(ctx, '#8b949e'))}</td></tr>"
+                    )
+            sections.append(f"""
+            <div class="section">
+                <h2>Position When Blundering</h2>
+                <table><tr><th>Context</th><th>Count</th><th></th></tr>
+                {rows}
+                </table>
+            </div>
+            """)
+
+        # Key insights
+        from .patterns import _generate_insights
+        insights = _generate_insights(pattern_report)
+        if insights:
+            insight_items = "".join(f"<li>{i}</li>" for i in insights)
+            sections.append(f"""
+            <div class="section" style="border-color:#58a6ff44">
+                <h2>Key Insights</h2>
+                <ul style="list-style:none;padding:0">
+                {insight_items}
+                </ul>
+            </div>
+            """)
+
+    # --- Opening Recommendations ---
+    if opening_recs:
+        problems = [r for r in opening_recs if r.win_rate < 0.5]
+        strengths = [r for r in opening_recs if r.win_rate >= 0.5]
+
+        if problems:
+            rows = ""
+            for r in problems:
+                rows += (
+                    f"<tr><td>{r.name}<br><small style='color:#8b949e'>as {r.color}</small></td>"
+                    f"<td>{r.games_played}</td>"
+                    f"<td>{r.win_rate*100:.0f}%</td>"
+                    f"<td>{r.suggestion}</td></tr>"
+                )
+            sections.append(f"""
+            <div class="section danger">
+                <h2>Openings to Study</h2>
+                <table><tr><th>Opening</th><th>Games</th><th>Win%</th><th>Recommendation</th></tr>
+                {rows}
+                </table>
+            </div>
+            """)
+
+        if strengths:
+            rows = ""
+            for r in strengths:
+                rows += (
+                    f"<tr><td>{r.name}<br><small style='color:#8b949e'>as {r.color}</small></td>"
+                    f"<td>{r.games_played}</td>"
+                    f"<td>{r.win_rate*100:.0f}%</td>"
+                    f"<td>{r.suggestion}</td></tr>"
+                )
+            sections.append(f"""
+            <div class="section success">
+                <h2>Your Best Openings — Keep Playing These</h2>
+                <table><tr><th>Opening</th><th>Games</th><th>Win%</th><th>Recommendation</th></tr>
+                {rows}
+                </table>
+            </div>
+            """)
+
     body = "\n".join(sections)
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
 
@@ -418,6 +535,8 @@ td {{ padding: 0.5rem; border-bottom: 1px solid #21262d; }}
 .tc-label {{ font-weight: bold; min-width: 60px; }}
 .rating-range {{ color: #8b949e; font-size: 0.85rem; min-width: 80px; }}
 .note {{ color: #8b949e; font-size: 0.85rem; margin-top: 0.75rem; }}
+li {{ padding: 0.5rem 0; border-bottom: 1px solid #21262d; color: #e6edf3; }}
+li:last-child {{ border-bottom: none; }}
 footer {{ text-align: center; color: #484f58; margin-top: 2rem; font-size: 0.8rem; }}
 </style>
 </head>
@@ -428,17 +547,25 @@ footer {{ text-align: center; color: #484f58; margin-top: 2rem; font-size: 0.8re
 </html>"""
 
 
-def save_report(profile: Profile, fmt: str = "html") -> Path:
+def save_report(profile: Profile, fmt: str = "html",
+                pattern_report=None, opening_recs=None) -> Path:
     """Save a profile report and return the file path."""
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     if fmt == "html":
         path = REPORT_DIR / f"{profile.username}_{timestamp}.html"
-        path.write_text(generate_html(profile))
+        path.write_text(generate_html(profile, pattern_report, opening_recs))
     else:
         from .profiler import format_profile
+        from .patterns import format_patterns
+        from .openings import format_recommendations
+        parts = [format_profile(profile)]
+        if pattern_report:
+            parts.append(format_patterns(pattern_report))
+        if opening_recs:
+            parts.append(format_recommendations(opening_recs))
         path = REPORT_DIR / f"{profile.username}_{timestamp}.txt"
-        path.write_text(format_profile(profile))
+        path.write_text("\n\n".join(parts))
 
     return path
